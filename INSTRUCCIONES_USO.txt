@@ -1,0 +1,70 @@
+SIMULADOR PYTHON DE KEYTOOL - INSTRUCCIONES DE USO
+=================================================
+
+1. Abrir la terminal
+--------------------
+Abre PowerShell en la carpeta del proyecto, donde están mykeytool.py y keystore.py.
+
+En este espacio de trabajo, el intérprete del entorno virtual está en .venv\bin. Ejecuta los comandos así:
+
+    & ".\.venv\bin\python.exe" .\mykeytool.py --help
+
+Si has creado un entorno virtual estándar de Windows, el ejecutable suele estar en .venv\Scripts:
+
+    & ".\.venv\Scripts\python.exe" .\mykeytool.py --help
+
+2. Instalar dependencias
+------------------------
+Si todavía no instalaste los requisitos en tu entorno Python, crea y activa un entorno virtual estándar de Windows:
+
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install -r requirements.txt
+
+El proyecto necesita la biblioteca cryptography.
+
+3. Generar una clave y crear el almacén
+---------------------------------------
+Ejecuta:
+
+    & ".\.venv\bin\python.exe" .\mykeytool.py --genkey
+
+El programa solicita:
+- Una contraseña nueva del KeyStore y su confirmación. Debe tener al menos 8 caracteres.
+- Un alias, por ejemplo: servidor1.
+- Los datos del titular: CN, OU, O, L, ST y C. El campo C debe tener dos letras, por ejemplo ES.
+- Una contraseña para la clave privada y su confirmación. Debe tener al menos 8 caracteres.
+
+Al terminar, se crea keystore.pystore en la carpeta actual. La clave se asocia al alias que escribiste. No olvides las contraseñas: el programa no puede recuperarlas.
+
+4. Crear una solicitud CSR
+--------------------------
+Ejecuta:
+
+    & ".\.venv\bin\python.exe" .\mykeytool.py --certreq
+
+Escribe la contraseña del KeyStore, el alias creado antes y la contraseña de la clave privada de ese alias. El resultado será un archivo PEM llamado <alias>.csr en la carpeta actual; por ejemplo, servidor1.csr.
+
+5. Usar otra ruta para el almacén
+---------------------------------
+Puedes guardar o leer un almacén en otra ubicación con --store. Usa la misma ruta en --genkey y --certreq:
+
+    & ".\.venv\bin\python.exe" .\mykeytool.py --genkey --store .\datos\mi-almacen.pystore
+    & ".\.venv\bin\python.exe" .\mykeytool.py --certreq --store .\datos\mi-almacen.pystore
+
+6. Ejecutar las pruebas
+-----------------------
+Desde la raíz del proyecto:
+
+    & ".\.venv\bin\python.exe" -m unittest discover -s tests -v
+
+Las pruebas comprueban el cifrado y lectura del almacén, contraseñas incorrectas, archivos ausentes o dañados, alias no permitidos o duplicados y la generación de una CSR.
+
+7. Errores comunes
+------------------
+- Si aparece que el almacén no existe, comprueba la carpeta actual y el valor de --store.
+- Si la contraseña del KeyStore no es correcta, el programa no puede descifrarlo.
+- Si el alias ya existe, el programa rechaza la nueva generación. Usa otro alias.
+- Los alias solo admiten letras inglesas, números, punto, guion y guion bajo; no admiten espacios ni separadores de carpetas.
+- Si la contraseña del alias es incorrecta, no se crea la CSR.
+- El archivo .pystore es un formato didáctico propio y no se puede abrir como almacén JKS o PKCS12 de Java.

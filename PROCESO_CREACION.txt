@@ -1,0 +1,61 @@
+SIMULADOR PYTHON DE KEYTOOL - PROCESO DE CREACION
+=================================================
+
+BORRADOR EN PRIMERA PERSONA
+---------------------------
+Este texto está escrito en primera persona para ayudarme a preparar la explicación del proyecto. Debo revisarlo y adaptarlo a lo que realmente he entendido y a las normas de mi centro sobre el uso de ayuda externa. Es importante que pueda explicar cada decisión con mis propias palabras.
+
+1. Analicé el enunciado
+-----------------------
+Primero separé los requisitos en tres partes: la interfaz de comandos, el almacenamiento seguro de claves y la generación de solicitudes CSR. También anoté los errores que debía contemplar: contraseña incorrecta, alias duplicado y almacén inexistente o dañado.
+
+2. Organicé el código en módulos
+--------------------------------
+Separé las responsabilidades en dos archivos. En mykeytool.py coloqué la interfaz de línea de comandos, las preguntas al usuario y el flujo de generación de claves y CSR. En keystore.py puse las operaciones de cifrado, lectura, guardado y validación del almacén. Así, la lógica de la terminal no queda mezclada con los detalles de persistencia.
+
+3. Definí los comandos
+----------------------
+Usé argparse para ofrecer --genkey y --certreq como opciones excluyentes. Añadí --store para permitir que el usuario elija dónde guardar el almacén; si no indica una ruta, se usa keystore.pystore en la carpeta actual.
+
+4. Preparé la captura de contraseñas y datos
+--------------------------------------------
+Uso getpass para pedir las contraseñas sin mostrarlas mientras se escriben. Al crear una contraseña, solicito confirmación y compruebo que tenga al menos ocho caracteres. Para el titular pido CN, OU, O, L, ST y C. También valido que el país tenga dos letras.
+
+5. Generé y protegí la clave RSA
+--------------------------------
+Con la biblioteca cryptography genero una clave RSA de 2048 bits y exponente público 65537. Serializo la clave privada en formato PEM/PKCS#8, cifrándola con la contraseña propia del alias. El registro guarda también los datos del titular para poder construir después la solicitud CSR.
+
+6. Cifré el almacén
+-------------------
+Antes de guardar, convierto los registros a JSON. Genero una sal aleatoria de 16 bytes y derivo una clave a partir de la contraseña del almacén mediante PBKDF2-HMAC-SHA256 con 600000 iteraciones. Con esa clave, Fernet cifra y autentica el contenido. El archivo guarda la versión del formato, la sal y los datos cifrados codificados en Base64; no guarda las contraseñas ni la clave privada en claro.
+
+Para reducir el riesgo de dejar un archivo incompleto si el guardado se interrumpe, escribo primero el resultado cifrado en un archivo temporal y luego reemplazo el almacén con os.replace.
+
+7. Implementé la creación de CSR
+--------------------------------
+Para --certreq, primero descifro el almacén con su contraseña y busco el alias pedido. Después solicito la contraseña de ese alias para recuperar la clave privada. Reconstruyo el Distinguished Name guardado, creo la solicitud con cryptography y la firmo con SHA-256. El resultado se guarda en formato PEM como <alias>.csr.
+
+8. Añadí validación y manejo de errores
+---------------------------------------
+Rechazo un alias duplicado antes de generar otra clave. Limito los caracteres permitidos en los alias para evitar que incluyan rutas de archivos. Si el almacén no existe, está dañado o no se puede descifrar, muestro un mensaje controlado. También informo si el alias no existe o si su contraseña no permite descifrar la clave. La CLI devuelve un código de salida distinto de cero al producirse un error esperado, sin mostrar una traza de Python al usuario.
+
+9. Probé los flujos principales
+-------------------------------
+Añadí pruebas automatizadas con unittest. Comprueban que el almacén se puede guardar y leer, que una contraseña maestra incorrecta se rechaza y que los archivos ausentes o malformados se detectan. También prueban la validación de alias, el rechazo de alias duplicados y el flujo completo de generación RSA y CSR. En ese flujo se comprueba que la CSR PEM se puede leer, que contiene el CN esperado, que la clave pública es de 2048 bits y que una contraseña de alias incorrecta no deja un archivo CSR.
+
+Para ejecutar las pruebas desde la carpeta del proyecto uso:
+
+    python -m unittest discover -s tests -v
+
+En la validación realizada, los cinco métodos de prueba terminaron correctamente. También comprobé que --help muestra los comandos y la opción --store.
+
+10. Documenté el proyecto
+-------------------------
+Por último, preparé el README con los requisitos, la instalación, ejemplos de uso, la matriz de pruebas y las limitaciones. Añadí requirements.txt para declarar cryptography y .gitignore para no incluir el entorno virtual, archivos temporales, CSR ni almacenes en el repositorio.
+
+DECISIONES Y LIMITACIONES QUE PUEDO EXPLICAR
+--------------------------------------------
+- El almacén .pystore es una implementación didáctica; no es compatible con los formatos JKS o PKCS12 de Java.
+- Una contraseña maestra incorrecta y un archivo cifrado alterado pueden producir el mismo error de autenticación. Por eso el programa informa de ambas posibilidades sin afirmar cuál ocurrió.
+- La clave privada tiene una contraseña de alias independiente de la contraseña maestra del almacén.
+- Las contraseñas no se guardan en texto claro. Si se olvidan, este programa no ofrece un mecanismo de recuperación.
