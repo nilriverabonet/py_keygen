@@ -4,8 +4,8 @@ Práctica UF3: simulador CLI de las funciones esenciales de `keytool`. El proyec
 
 ## Integrantes
 
-- Nombre y apellidos del/de la integrante 1: **[Completar]**
-- Nombre y apellidos del/de la integrante 2: **[Completar]**
+- Nombre y apellidos del/de la integrante 1: **Nil Rivera**
+- Nombre y apellidos del/de la integrante 2: **Arnau Pousa**
 
 ## Requisitos e instalación
 
