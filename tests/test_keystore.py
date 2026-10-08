@@ -51,6 +51,23 @@ class KeystoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_alias("../outside")
 
+    def test_genkey_allows_empty_optional_distinguished_name_fields(self) -> None:
+        answers = [
+            "demo",
+            "Example CN",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+        passwords = ["store-password", "store-password", "alias-password", "alias-password"]
+        with patch("builtins.input", side_effect=answers), patch("getpass.getpass", side_effect=passwords):
+            self.assertEqual(main(["--genkey", "--store", str(self.store_path)]), 0)
+
+        contents = load_store(self.store_path, "store-password")
+        self.assertEqual(contents["aliases"]["demo"]["subject"], [["CN", "Example CN"]])
+
     def test_genkey_rejects_duplicate_alias(self) -> None:
         answers = ["demo", "Example CN", "Unit", "Example Org", "Madrid", "Madrid", "ES"]
         passwords = ["store-password", "store-password", "alias-password", "alias-password"]

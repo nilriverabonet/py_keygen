@@ -64,11 +64,15 @@ def _read_distinguished_name() -> list[tuple[str, str]]:
     values: list[tuple[str, str]] = []
     for key, label in fields:
         value = input(f"{label}: ").strip()
+        if key == "CN" and not value:
+            raise ValueError("El campo CN no puede estar vacío.")
         if not value:
-            raise ValueError(f"El campo {key} no puede estar vacío.")
+            continue
         if key == "C" and (len(value) != 2 or not value.isalpha()):
             raise ValueError("El país debe ser un código de dos letras, por ejemplo ES.")
         values.append((key, value))
+    if not values:
+        raise ValueError("Debe introducir al menos el campo CN.")
     return values
 
 
@@ -84,7 +88,13 @@ def _make_subject(values: list[tuple[str, str]]):
         "ST": NameOID.STATE_OR_PROVINCE_NAME,
         "C": NameOID.COUNTRY_NAME,
     }
-    return x509.Name([x509.NameAttribute(name_oids[key], value) for key, value in values])
+    return x509.Name(
+        [
+            x509.NameAttribute(name_oids[key], value)
+            for key, value in values
+            if value and key in name_oids
+        ]
+    )
 
 
 def _generate_key(store_path: Path) -> None:
