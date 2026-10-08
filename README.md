@@ -24,6 +24,17 @@ python -m pip install -r requirements.txt
 
 La dependencia principal indicada en el enunciado también se puede instalar directamente con `pip install cryptography`.
 
+## Actualizar el proyecto con cambios de otra persona
+
+Si otra persona ha subido un commit a la rama `main`, abre una terminal en la carpeta del proyecto y ejecuta:
+
+```console
+git status
+git pull origin main
+```
+
+`git pull` descarga los commits nuevos y los integra en tu copia local. Si tienes cambios propios sin guardar, primero guárdalos en un commit o apártalos con `git stash`; después de actualizar, recupera los cambios apartados con `git stash pop`. Si Git avisa de conflictos, resuélvelos en los archivos indicados y confirma la resolución antes de continuar.
+
 ## Uso
 
 La ayuda muestra los comandos y opciones disponibles:
