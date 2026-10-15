@@ -3,68 +3,100 @@ SIMULADOR PYTHON DE KEYTOOL - INSTRUCCIONES DE USO
 
 1. Abrir la terminal
 --------------------
-Abre PowerShell en la carpeta del proyecto, donde están mykeytool.py y keystore.py.
+Abre PowerShell o CMD en la carpeta del proyecto.
+Si tienes el entorno virtual activo, puedes usar directamente `python mykeytool.py`.
+O bien invocar el intérprete del entorno virtual:
 
-En este espacio de trabajo, el intérprete del entorno virtual está en .venv\bin. Ejecuta los comandos así:
-
-    & ".\.venv\bin\python.exe" .\mykeytool.py --help
-
-Si has creado un entorno virtual estándar de Windows, el ejecutable suele estar en .venv\Scripts:
-
-    & ".\.venv\Scripts\python.exe" .\mykeytool.py --help
+    .\.venv\Scripts\python.exe mykeytool.py --help
 
 2. Instalar dependencias
 ------------------------
-Si todavía no instalaste los requisitos en tu entorno Python, crea y activa un entorno virtual estándar de Windows:
+Si aún no las has instalado:
 
     python -m venv .venv
     .\.venv\Scripts\Activate.ps1
-    python -m pip install -r requirements.txt
+    pip install cryptography
 
-El proyecto necesita la biblioteca cryptography.
+3. Generar una clave y crear el almacén (--genkey o --genkeypair)
+-----------------------------------------------------------------
+Ejecuta:
 
-3. Generar una clave y crear el almacén
+    python mykeytool.py --genkeypair
+
+El programa solicita:
+- Una contraseña para el KeyStore y su confirmación (mínimo 8 caracteres).
+- Un alias para identificar la clave (ejemplo: `servidor-web`).
+- Los datos del titular (DName):
+  * CN: Nombre común / Dominio (ej. monlau.es)
+  * OU: Unidad organizativa (ej. Informatica)
+  * O:  Organización (ej. Monlau Formacio)
+  * L:  Localidad (ej. Barcelona)
+  * ST: Provincia o estado (ej. Barcelona)
+  * C:  Código de país ISO de 2 letras (ej. ES)
+- Una contraseña propia para la clave privada del alias y su confirmación.
+
+Al terminar, se genera el par RSA de 2048 bits y un certificado autofirmado X.509 en `keystore.pystore`.
+
+4. Crear una solicitud CSR (--certreq)
 ---------------------------------------
 Ejecuta:
 
-    & ".\.venv\bin\python.exe" .\mykeytool.py --genkey
+    python mykeytool.py --certreq
 
-El programa solicita:
-- Una contraseña nueva del KeyStore y su confirmación. Debe tener al menos 8 caracteres.
-- Un alias, por ejemplo: servidor1.
-- Los datos del titular: CN, OU, O, L, ST y C. El campo C debe tener dos letras, por ejemplo ES.
-- Una contraseña para la clave privada y su confirmación. Debe tener al menos 8 caracteres.
+Solicita:
+- Contraseña del KeyStore.
+- Alias de la clave creada.
+- Contraseña de la clave privada de ese alias.
 
-Al terminar, se crea keystore.pystore en la carpeta actual. La clave se asocia al alias que escribiste. No olvides las contraseñas: el programa no puede recuperarlas.
+El resultado es el archivo PEM `<alias>.csr` listo para enviar a una Autoridad de Certificación (CA).
 
-4. Crear una solicitud CSR
---------------------------
+5. Listar las entradas del almacén (--list) [Ampliación]
+--------------------------------------------------------
 Ejecuta:
 
-    & ".\.venv\bin\python.exe" .\mykeytool.py --certreq
+    python mykeytool.py --list
 
-Escribe la contraseña del KeyStore, el alias creado antes y la contraseña de la clave privada de ese alias. El resultado será un archivo PEM llamado <alias>.csr en la carpeta actual; por ejemplo, servidor1.csr.
+Introduce la contraseña del KeyStore y verás:
+- Listado de todos los alias.
+- Tipo de entrada (PrivateKeyEntry).
+- Propietario (Distinguished Name).
+- Huella digital del certificado en formato SHA-256.
 
-5. Usar otra ruta para el almacén
----------------------------------
-Puedes guardar o leer un almacén en otra ubicación con --store. Usa la misma ruta en --genkey y --certreq:
+6. Exportar el certificado público (--exportcert o --export) [Ampliación]
+-------------------------------------------------------------------------
+Ejecuta:
 
-    & ".\.venv\bin\python.exe" .\mykeytool.py --genkey --store .\datos\mi-almacen.pystore
-    & ".\.venv\bin\python.exe" .\mykeytool.py --certreq --store .\datos\mi-almacen.pystore
+    python mykeytool.py --exportcert --alias servidor-web
 
-6. Ejecutar las pruebas
------------------------
-Desde la raíz del proyecto:
+Genera el archivo `servidor-web.crt` en formato PEM (X.509), instalable en navegadores y sistemas operativos.
 
-    & ".\.venv\bin\python.exe" -m unittest discover -s tests -v
+7. Inspeccionar un certificado o CSR (--printcert) [Ampliación]
+---------------------------------------------------------------
+Ejecuta:
 
-Las pruebas comprueban el cifrado y lectura del almacén, contraseñas incorrectas, archivos ausentes o dañados, alias no permitidos o duplicados y la generación de una CSR.
+    python mykeytool.py --printcert --file servidor-web.crt
+    python mykeytool.py --printcert --file servidor-web.csr
 
-7. Errores comunes
-------------------
-- Si aparece que el almacén no existe, comprueba la carpeta actual y el valor de --store.
-- Si la contraseña del KeyStore no es correcta, el programa no puede descifrarlo.
-- Si el alias ya existe, el programa rechaza la nueva generación. Usa otro alias.
-- Los alias solo admiten letras inglesas, números, punto, guion y guion bajo; no admiten espacios ni separadores de carpetas.
-- Si la contraseña del alias es incorrecta, no se crea la CSR.
-- El archivo .pystore es un formato didáctico propio y no se puede abrir como almacén JKS o PKCS12 de Java.
+Muestra de forma legible el sujeto, emisor, validez, algoritmo de clave, algoritmo de firma y huellas digitales.
+
+8. Eliminar una clave (--delete) [Ampliación]
+---------------------------------------------
+Ejecuta:
+
+    python mykeytool.py --delete --alias servidor-web
+
+Pide la contraseña del almacén y confirmación previa (s/n) antes de eliminar la entrada.
+
+9. Rutas personalizadas del almacén (--store o --keystore)
+----------------------------------------------------------
+Puedes usar `--store` o `--keystore` para trabajar con otra ruta o nombre de archivo:
+
+    python mykeytool.py --genkeypair --keystore mis_claves.pystore
+    python mykeytool.py --certreq --keystore mis_claves.pystore
+
+10. Ejecutar las pruebas automatizadas
+--------------------------------------
+Para verificar que todo funciona correctamente:
+
+    python -m unittest discover -s tests -v
+
