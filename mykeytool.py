@@ -1,4 +1,8 @@
-"""Interactive command-line simulator of the essential Java keytool features."""
+"""
+Simulador interactivo por línea de comandos (CLI) de Java Keytool.
+Permite generar pares de claves RSA, almacenes cifrados multicapa,
+solicitudes de firma de certificados (CSR) y certificados X.509.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Importamos las excepciones y funciones auxiliares desde keystore.py
 from keystore import (
     AliasExistsError,
     AliasNotFoundError,
@@ -24,12 +29,24 @@ from keystore import (
 )
 
 
+# ==============================================================================
+# Configuración del Analizador de Argumentos (CLI con argparse)
+# ==============================================================================
 def build_parser() -> argparse.ArgumentParser:
+    """
+    Configura y devuelve el analizador de argumentos de línea de comandos.
+    Agrupa los comandos en un grupo mutuamente excluyente (--genkey, --certreq, etc.)
+    y permite opciones adicionales como --store / --keystore, --alias y --file.
+    """
     parser = argparse.ArgumentParser(
         prog="mykeytool.py",
         description="Simulador Python de Java Keytool: crea almacenes cifrados, claves RSA, certificados y solicitudes CSR.",
     )
+    
+    # Comandos principales: solo se puede ejecutar uno a la vez (mutuamente excluyentes)
     commands = parser.add_mutually_exclusive_group(required=True)
+    
+    # 1. Generación de claves (admite --genkey y --genkeypair como en Java Keytool)
     commands.add_argument(
         "--genkey",
         "--genkeypair",
@@ -37,11 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
         dest="genkey",
         help="Genera un par de claves RSA de 2048 bits con certificado autofirmado y lo almacena.",
     )
+    
+    # 2. Generación de CSR para pedir firma a una Autoridad de Certificación
     commands.add_argument(
         "--certreq",
         action="store_true",
         help="Genera una solicitud de firma de certificado CSR en formato PEM.",
     )
+    
+    # --- Comandos de Ampliación ---
     commands.add_argument(
         "--list",
         action="store_true",
@@ -64,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="[Ampliación] Elimina un alias del KeyStore de forma segura.",
     )
+
+    # Argumentos opcionales para parametrizar rutas y alias
     parser.add_argument(
         "--store",
         "--keystore",
@@ -87,7 +110,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ==============================================================================
+# Funciones Auxiliares para Captura Segura de Contraseñas y Datos
+# ==============================================================================
 def _ask_password(prompt: str) -> str:
+    """Pide una contraseña usando getpass (sin mostrarla en pantalla) y valida longitud mínima."""
     password = getpass.getpass(prompt)
     if len(password) < 8:
         raise ValueError("La contraseña debe tener al menos 8 caracteres.")
@@ -95,6 +122,7 @@ def _ask_password(prompt: str) -> str:
 
 
 def _ask_new_password(label: str) -> str:
+    """Solicita una contraseña nueva y pide confirmarla para evitar erratas de escritura."""
     password = _ask_password(f"Contraseña nueva del {label}: ")
     confirmation = getpass.getpass(f"Confirma la contraseña del {label}: ")
     if password != confirmation:
@@ -103,6 +131,10 @@ def _ask_new_password(label: str) -> str:
 
 
 def _read_distinguished_name() -> list[tuple[str, str]]:
+    """
+    Solicita al usuario los 6 campos del Nombre Distinguido (DName) para el certificado/CSR.
+    El campo CN (Common Name) es obligatorio. El país (C) debe tener exactamente 2 letras (ej. ES).
+    """
     fields = (
         ("CN", "Nombre común (CN)"),
         ("OU", "Unidad organizativa (OU)"),
@@ -127,6 +159,7 @@ def _read_distinguished_name() -> list[tuple[str, str]]:
 
 
 def _make_subject(values: list[tuple[str, str]]):
+    """Construye un objeto x509.Name a partir de la lista de tuplas (clave, valor)."""
     from cryptography import x509
     from cryptography.x509.oid import NameOID
 
@@ -147,7 +180,19 @@ def _make_subject(values: list[tuple[str, str]]):
     )
 
 
+# ==============================================================================
+# Operación 1: Generación de Claves y Almacén (--genkey / --genkeypair)
+# ==============================================================================
 def _generate_key(store_path: Path, alias_arg: str | None = None) -> None:
+    """
+    Flujo para crear un par RSA de 2048 bits:
+    1. Si el almacén existe, pide la clave para abrirlo; si no, pide una nueva clave para crearlo.
+    2. Pide y valida el alias (rechaza si ya existe).
+    3. Pide los datos de identidad (DName).
+    4. Pide la contraseña propia de este alias para proteger su clave privada.
+    5. Genera la clave RSA 2048 bits y el certificado autofirmado X.509.
+    6. Guarda todo cifrado en disco de forma segura.
+    """
     if store_path.exists():
         store_password = _ask_password("Contraseña del KeyStore: ")
         contents = load_store(store_path, store_password)
@@ -155,14 +200,18 @@ def _generate_key(store_path: Path, alias_arg: str | None = None) -> None:
         store_password = _ask_new_password("KeyStore")
         contents = {"aliases": {}}
 
+    # Obtenemos el alias por argumento CLI o por prompt interactivo
     raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
     alias = validate_alias(raw_alias)
     aliases: dict[str, Any] = contents.setdefault("aliases", {})
     if alias in aliases:
         raise AliasExistsError(f"El alias '{alias}' ya existe en el almacén.")
 
+    # Captura de datos del titular y contraseña de la clave privada
     subject_values = _read_distinguished_name()
     alias_password = _ask_new_password(f"alias '{alias}'")
+    
+    # Generamos los componentes criptográficos
     encrypted_key, public_key_pem, cert_pem = generate_key_materials(alias_password, subject_values)
 
     dname_str = ", ".join(f"{k}={v}" for k, v in subject_values)
@@ -173,11 +222,24 @@ def _generate_key(store_path: Path, alias_arg: str | None = None) -> None:
         "public_key": public_key_pem,
         "certificate": cert_pem,
     }
+    
+    # Guardamos el almacén actualizado cifrado con Fernet + PBKDF2
     save_store(store_path, store_password, contents)
     print(f"Par RSA de 2048 bits guardado con el alias '{alias}' en {store_path}.")
 
 
+# ==============================================================================
+# Operación 2: Generación de Solicitud de Certificado CSR (--certreq)
+# ==============================================================================
 def _generate_csr(store_path: Path, alias_arg: str | None = None, file_arg: Path | None = None) -> None:
+    """
+    Flujo para generar una solicitud de firma CSR:
+    1. Desbloquea el KeyStore con su contraseña.
+    2. Busca el registro del alias especificado.
+    3. Pide la contraseña individual del alias para descifrar la clave privada.
+    4. Reconstruye el DName y genera la solicitud X.509 firmada con SHA-256.
+    5. Exporta el archivo <alias>.csr en formato estándar PEM.
+    """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
     raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
@@ -186,6 +248,7 @@ def _generate_csr(store_path: Path, alias_arg: str | None = None, file_arg: Path
     if record is None:
         raise AliasNotFoundError(f"No existe el alias '{alias}' en el almacén.")
 
+    # Pedimos la clave de este alias concreto para descifrar la clave privada
     alias_password = _ask_password(f"Contraseña del alias '{alias}': ")
     try:
         encrypted_key = base64.b64decode(record["private_key"], validate=True)
@@ -197,14 +260,25 @@ def _generate_csr(store_path: Path, alias_arg: str | None = None, file_arg: Path
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
 
+    # Desciframos la clave privada RSA
     private_key = decrypt_private_key(encrypted_key, alias_password)
+    
+    # Construimos y firmamos digitalmente la solicitud CSR
     request = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(private_key, hashes.SHA256())
     csr_path = file_arg if file_arg is not None else Path(f"{alias}.csr")
     csr_path.write_bytes(request.public_bytes(serialization.Encoding.PEM))
     print(f"Solicitud CSR creada: {csr_path}")
 
 
+# ==============================================================================
+# Operación 3 [Ampliación]: Listar Entradas del Almacén (--list)
+# ==============================================================================
 def _list_store(store_path: Path) -> None:
+    """
+    Muestra en consola un resumen de todas las entradas del almacén:
+    nombre del alias, tipo de entrada (PrivateKeyEntry), DName y huella digital SHA-256.
+    Emula el comportamiento oficial de `keytool -list -v` de Java.
+    """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
     aliases: dict[str, Any] = contents.get("aliases", {})
@@ -227,6 +301,7 @@ def _list_store(store_path: Path) -> None:
             dname = ", ".join(f"{k}={v}" for k, v in record["subject"])
         print(f"Propietario (DName): {dname or 'N/A'}")
 
+        # Extraemos la huella digital SHA-256 del certificado si está guardado
         cert_pem = record.get("certificate")
         if cert_pem:
             try:
@@ -242,7 +317,14 @@ def _list_store(store_path: Path) -> None:
         print("-" * 50)
 
 
+# ==============================================================================
+# Operación 4 [Ampliación]: Exportar Certificado Digital (--exportcert / --export)
+# ==============================================================================
 def _export_cert(store_path: Path, alias_arg: str | None = None, file_arg: Path | None = None) -> None:
+    """
+    Exporta el certificado público X.509 de un alias a un fichero `.crt` independiente.
+    Este archivo contiene únicamente la clave pública y los datos de identidad.
+    """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
     raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
@@ -260,7 +342,14 @@ def _export_cert(store_path: Path, alias_arg: str | None = None, file_arg: Path 
     print(f"Certificado exportado en: {out_path}")
 
 
+# ==============================================================================
+# Operación 5 [Ampliación]: Inspeccionar Archivo de Certificado o CSR (--printcert)
+# ==============================================================================
 def _print_cert(file_arg: Path | None = None) -> None:
+    """
+    Permite visualizar los datos técnicos de cualquier certificado `.crt` o solicitud `.csr`.
+    No requiere contraseña porque la información de certificados y CSR es pública.
+    """
     if file_arg is None:
         path_str = input("Ruta del archivo (.crt o .csr): ").strip()
         file_arg = Path(path_str)
@@ -281,7 +370,13 @@ def _print_cert(file_arg: Path | None = None) -> None:
     print(f"\nArchivo: {file_arg}\n{info}")
 
 
+# ==============================================================================
+# Operación 6 [Ampliación]: Borrado Seguro de un Alias (--delete)
+# ==============================================================================
 def _delete_alias(store_path: Path, alias_arg: str | None = None) -> None:
+    """
+    Elimina una clave o entrada del almacén solicitando confirmación previa.
+    """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
     raw_alias = alias_arg if alias_arg is not None else input("Alias a eliminar: ").strip()
@@ -290,6 +385,7 @@ def _delete_alias(store_path: Path, alias_arg: str | None = None) -> None:
     if alias not in aliases:
         raise AliasNotFoundError(f"No existe el alias '{alias}' en el almacén.")
 
+    # Confirmación de seguridad
     confirmation = input(f"¿Desea realmente eliminar la entrada con el alias '{alias}'? (s/n): ").strip().lower()
     if confirmation not in ("s", "si", "sí", "y", "yes"):
         print("Operación de borrado cancelada.")
@@ -300,7 +396,15 @@ def _delete_alias(store_path: Path, alias_arg: str | None = None) -> None:
     print(f"La entrada con alias '{alias}' ha sido eliminada del almacén.")
 
 
+# ==============================================================================
+# Punto de Entrada Principal (main)
+# ==============================================================================
 def main(argv: list[str] | None = None) -> int:
+    """
+    Parsea los argumentos y ejecuta la operación solicitada.
+    Controla todas las excepciones esperadas para mostrar mensajes claros y
+    retornar códigos de salida adecuados (1 para error, 130 para cancelación).
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -317,14 +421,16 @@ def main(argv: list[str] | None = None) -> int:
         elif args.delete:
             _delete_alias(args.store, args.alias)
     except (StoreError, ValueError, OSError, RuntimeError) as error:
+        # Error controlado de usuario o formato: imprimimos en stderr sin traceback
         print(f"Error: {error}", file=sys.stderr)
         return 1
     except (EOFError, KeyboardInterrupt):
+        # El usuario pulsó Ctrl+C para cancelar
         print("\nOperación cancelada.", file=sys.stderr)
         return 130
     return 0
 
 
-
 if __name__ == "__main__":
     raise SystemExit(main())
+
