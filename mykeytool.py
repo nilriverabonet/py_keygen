@@ -133,7 +133,8 @@ def _ask_new_password(label: str) -> str:
 def _read_distinguished_name() -> list[tuple[str, str]]:
     """
     Solicita al usuario los 6 campos del Nombre Distinguido (DName) para el certificado/CSR.
-    El campo CN (Common Name) es obligatorio. El país (C) debe tener exactamente 2 letras (ej. ES).
+    Todos los campos se pueden dejar vacíos pulsando Enter.
+    Si se deja el CN vacío, se asigna automáticamente 'Unknown' por defecto (igual que en Java Keytool).
     """
     fields = (
         ("CN", "Nombre común (CN)"),
@@ -147,14 +148,14 @@ def _read_distinguished_name() -> list[tuple[str, str]]:
     for key, label in fields:
         value = input(f"{label}: ").strip()
         if key == "CN" and not value:
-            raise ValueError("El campo CN no puede estar vacío.")
+            # Si se deja vacío el CN, toma 'Unknown' como en Java Keytool en vez de fallar
+            value = "Unknown"
         if not value:
+            # Los campos opcionales vacíos (OU, O, L, ST, C) se omiten
             continue
         if key == "C" and (len(value) != 2 or not value.isalpha()):
             raise ValueError("El país debe ser un código de dos letras, por ejemplo ES.")
         values.append((key, value))
-    if not values:
-        raise ValueError("Debe introducir al menos el campo CN.")
     return values
 
 
