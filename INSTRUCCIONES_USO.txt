@@ -1,102 +1,116 @@
 SIMULADOR PYTHON DE KEYTOOL - INSTRUCCIONES DE USO
 =================================================
 
-1. Abrir la terminal
---------------------
-Abre PowerShell o CMD en la carpeta del proyecto.
-Si tienes el entorno virtual activo, puedes usar directamente `python mykeytool.py`.
-O bien invocar el intérprete del entorno virtual:
+IMPORTANTE: ¿TIENES PROBLEMAS CON EL ENTORNO VIRTUAL (.venv)?
+-------------------------------------------------------------
+¡NO necesitas crear ni activar un entorno virtual para usar este programa!
+En tu equipo Python ya está instalado y la librería `cryptography` ya está lista.
 
-    .\.venv\Scripts\python.exe mykeytool.py --help
+Puedes ejecutar el programa DIRECTAMENTE abriendo PowerShell o CMD y escribiendo:
 
-2. Instalar dependencias
-------------------------
-Si aún no las has instalado:
+    python mykeytool.py --help
 
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
+Si el comando `python` no te responde, prueba con `py`:
+
+    py mykeytool.py --help
+
+-------------------------------------------------------------
+SI POWERSHELL TE DA ERROR AL ACTIVAR (.venv) "execution of scripts is disabled":
+Windows bloquea por seguridad los scripts .ps1 por defecto.
+Tienes dos soluciones muy sencillas:
+
+Opción A (Recomendada): Ejecuta directamente con `python` sin activar nada:
     pip install cryptography
+    python mykeytool.py --genkeypair
 
-3. Generar una clave y crear el almacén (--genkey o --genkeypair)
+Opción B: Desbloquear los scripts en PowerShell para esta sesión:
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+    .\.venv\Scripts\Activate.ps1
+-------------------------------------------------------------
+
+1. Generar una clave y crear el almacén (--genkey o --genkeypair)
 -----------------------------------------------------------------
 Ejecuta:
 
     python mykeytool.py --genkeypair
 
-El programa solicita:
-- Una contraseña para el KeyStore y su confirmación (mínimo 8 caracteres).
-- Un alias para identificar la clave (ejemplo: `servidor-web`).
-- Los datos del titular (DName):
+El programa te pedirá:
+- Contraseña para el KeyStore y su confirmación (mínimo 8 caracteres).
+- Alias para identificar la clave (por ejemplo: `servidor-web`).
+- Datos del titular (DName):
   * CN: Nombre común / Dominio (ej. monlau.es)
   * OU: Unidad organizativa (ej. Informatica)
   * O:  Organización (ej. Monlau Formacio)
   * L:  Localidad (ej. Barcelona)
   * ST: Provincia o estado (ej. Barcelona)
   * C:  Código de país ISO de 2 letras (ej. ES)
-- Una contraseña propia para la clave privada del alias y su confirmación.
+- Contraseña propia para la clave privada del alias y su confirmación.
 
-Al terminar, se genera el par RSA de 2048 bits y un certificado autofirmado X.509 en `keystore.pystore`.
+Al terminar, se genera el archivo `keystore.pystore` con la clave RSA de 2048 bits
+y el certificado autofirmado X.509 v3.
 
-4. Crear una solicitud CSR (--certreq)
+2. Crear una solicitud CSR (--certreq)
 ---------------------------------------
 Ejecuta:
 
     python mykeytool.py --certreq
 
-Solicita:
+Te solicitará:
 - Contraseña del KeyStore.
 - Alias de la clave creada.
 - Contraseña de la clave privada de ese alias.
 
 El resultado es el archivo PEM `<alias>.csr` listo para enviar a una Autoridad de Certificación (CA).
 
-5. Listar las entradas del almacén (--list) [Ampliación]
+3. Listar las entradas del almacén (--list) [Ampliación]
 --------------------------------------------------------
 Ejecuta:
 
     python mykeytool.py --list
 
-Introduce la contraseña del KeyStore y verás:
-- Listado de todos los alias.
+Introduce la contraseña del KeyStore y verás en pantalla:
+- Listado de todos los alias guardados.
 - Tipo de entrada (PrivateKeyEntry).
 - Propietario (Distinguished Name).
 - Huella digital del certificado en formato SHA-256.
 
-6. Exportar el certificado público (--exportcert o --export) [Ampliación]
+4. Exportar el certificado público (--exportcert o --export) [Ampliación]
 -------------------------------------------------------------------------
 Ejecuta:
 
     python mykeytool.py --exportcert --alias servidor-web
 
-Genera el archivo `servidor-web.crt` en formato PEM (X.509), instalable en navegadores y sistemas operativos.
+Genera el archivo `servidor-web.crt` en formato PEM (X.509), instalable en Windows o navegadores web.
 
-7. Inspeccionar un certificado o CSR (--printcert) [Ampliación]
+5. Inspeccionar un certificado o CSR (--printcert) [Ampliación]
 ---------------------------------------------------------------
 Ejecuta:
 
     python mykeytool.py --printcert --file servidor-web.crt
     python mykeytool.py --printcert --file servidor-web.csr
 
-Muestra de forma legible el sujeto, emisor, validez, algoritmo de clave, algoritmo de firma y huellas digitales.
+Muestra de forma legible el sujeto, emisor, fechas de validez, algoritmo y huellas digitales.
+No requiere contraseña porque los certificados y CSR son públicos.
 
-8. Eliminar una clave (--delete) [Ampliación]
+6. Eliminar una clave (--delete) [Ampliación]
 ---------------------------------------------
 Ejecuta:
 
     python mykeytool.py --delete --alias servidor-web
 
-Pide la contraseña del almacén y confirmación previa (s/n) antes de eliminar la entrada.
+Pide la contraseña del almacén y confirmación previa (s/n) antes de borrar la entrada.
 
-9. Rutas personalizadas del almacén (--store o --keystore)
+7. Rutas personalizadas del almacén (--store o --keystore)
 ----------------------------------------------------------
-Puedes usar `--store` o `--keystore` para trabajar con otra ruta o nombre de archivo:
+Puedes usar `--store` o `--keystore` para trabajar con otro archivo:
 
     python mykeytool.py --genkeypair --keystore mis_claves.pystore
     python mykeytool.py --certreq --keystore mis_claves.pystore
 
-10. Ejecutar las pruebas automatizadas
+8. Ejecutar las pruebas automatizadas
 --------------------------------------
-Para verificar que todo funciona correctamente:
+Para verificar que todo funciona al 100%:
 
     python -m unittest discover -s tests -v
+
 
