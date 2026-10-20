@@ -237,5 +237,19 @@ class KeystoreTests(unittest.TestCase):
         self.assertEqual(delta.days, 90)
 
 
+    def test_dname_lowercase_country_and_unknown_handling(self) -> None:
+        # Si el país se introduce en minúsculas 'es', se normaliza a 'ES'
+        answers = ["dname-test", "Server Test", "", "", "", "", "es"]
+        passwords = ["store-pass-dn", "store-pass-dn", "alias-pass-dn", "alias-pass-dn"]
+        with patch("builtins.input", side_effect=answers), patch("getpass.getpass", side_effect=passwords):
+            self.assertEqual(main(["--genkey", "--store", str(self.store_path)]), 0)
+
+        contents = load_store(self.store_path, "store-pass-dn")
+        self.assertEqual(
+            contents["aliases"]["dname-test"]["subject"],
+            [["CN", "Server Test"], ["C", "ES"]],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

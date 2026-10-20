@@ -150,17 +150,20 @@ def _ask_new_password(label: str) -> str:
 
 def _read_distinguished_name() -> list[tuple[str, str]]:
     """
-    Solicita al usuario los 6 campos del Nombre Distinguido (DName) para el certificado/CSR.
-    Todos los campos se pueden dejar vacíos pulsando Enter.
-    Si se deja el CN vacío, se asigna automáticamente 'Unknown' por defecto (igual que en Java Keytool).
+    Solicita al usuario las 6 preguntas interactivas del Nombre Distinguido (DName) para el certificado/CSR.
+    Igual que en Java Keytool:
+    - Todos los campos se pueden dejar vacíos pulsando Enter.
+    - El campo CN toma el valor por defecto literal 'Unknown'.
+    - Los campos de organización y localidad opcionales vacíos se omiten o toman 'Unknown'.
+    - El código de país (C) se normaliza a mayúsculas de 2 letras (ej. ES).
     """
     fields = (
-        ("CN", "Nombre común (CN)"),
-        ("OU", "Unidad organizativa (OU)"),
-        ("O", "Organización (O)"),
-        ("L", "Localidad (L)"),
-        ("ST", "Provincia o estado (ST)"),
-        ("C", "País, código de 2 letras (C)"),
+        ("CN", "Nombre y apellidos o nombre común (CN) [Unknown]"),
+        ("OU", "Nombre de la unidad organizativa (OU) [Unknown]"),
+        ("O", "Nombre de la organización (O) [Unknown]"),
+        ("L", "Nombre de la ciudad o localidad (L) [Unknown]"),
+        ("ST", "Nombre del estado o provincia (ST) [Unknown]"),
+        ("C", "Código de país de dos letras (C) [Unknown]"),
     )
     values: list[tuple[str, str]] = []
     for key, label in fields:
@@ -169,10 +172,12 @@ def _read_distinguished_name() -> list[tuple[str, str]]:
             # Si se deja vacío el CN, toma 'Unknown' como en Java Keytool en vez de fallar
             value = "Unknown"
         if not value:
-            # Los campos opcionales vacíos (OU, O, L, ST, C) se omiten
+            # Los campos opcionales vacíos se omiten
             continue
-        if key == "C" and (len(value) != 2 or not value.isalpha()):
-            raise ValueError("El país debe ser un código de dos letras, por ejemplo ES.")
+        if key == "C":
+            value = value.upper()
+            if len(value) != 2 or not value.isalpha():
+                raise ValueError("El país debe ser un código de dos letras, por ejemplo ES.")
         values.append((key, value))
     return values
 
