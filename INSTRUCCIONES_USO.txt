@@ -35,19 +35,19 @@ Ejecuta:
     python mykeytool.py --genkeypair
 
 El programa te pedirá:
-- Contraseña para el KeyStore y su confirmación (mínimo 6 caracteres exactos, según estándar de Java Keytool).
-- Alias para identificar la clave (por ejemplo: `servidor-web`).
+- Contraseña para el KeyStore y su confirmación (mínimo 6 caracteres exactos, según estándar de Java Keytool; admite espacios y Unicode).
+- Alias para identificar la clave (por ejemplo: `servidor-web`; si se omite o pulsa Enter, toma `mykey` por defecto).
 - Datos del titular (DName):
-  * CN: Nombre común / Dominio (ej. monlau.es)
-  * OU: Unidad organizativa (ej. Informatica)
-  * O:  Organización (ej. Monlau Formacio)
-  * L:  Localidad (ej. Barcelona)
-  * ST: Provincia o estado (ej. Barcelona)
-  * C:  Código de país ISO de 2 letras (ej. ES)
-- Contraseña propia para la clave privada del alias y su confirmación.
+  * CN: Nombre común / Dominio (si se deja vacío toma 'Unknown' por defecto)
+  * OU: Unidad organizativa (opcional, pulsando Enter)
+  * O:  Organización (opcional, pulsando Enter)
+  * L:  Localidad (opcional, pulsando Enter)
+  * ST: Provincia o estado (opcional, pulsando Enter)
+  * C:  Código de país ISO de 2 letras (ej. ES; se normaliza automáticamente a mayúsculas)
+- Contraseña propia para la clave privada del alias y su confirmación (mínimo 6 caracteres).
 
 Al terminar, se genera el archivo `keystore.pystore` con la clave RSA de 2048 bits
-y el certificado autofirmado X.509 v3.
+y el certificado autofirmado X.509 v3 válido por 90 días (estándar oficial de Java Keytool).
 
 2. Crear una solicitud CSR (--certreq)
 ---------------------------------------

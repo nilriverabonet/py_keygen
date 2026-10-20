@@ -43,13 +43,18 @@ Proyecto de simulación en Python de las funcionalidades esenciales de la herram
 
 ## 3. Fundamento Criptográfico y Arquitectura de Seguridad
 
-De acuerdo con el manual de teoría del módulo:
+De acuerdo con el manual de teoría del módulo y las especificaciones oficiales de Java Keytool:
 - **Cifrado Simétrico del Almacén**: Se utiliza derivación de claves mediante **PBKDF2-HMAC-SHA256** con una sal criptográfica aleatoria de 16 bytes (`os.urandom(16)`) y **600.000 iteraciones** (recomendación de OWASP contra ataques de fuerza bruta). El contenido se protege con **Fernet** (cifrado autenticado AES-128-CBC + HMAC-SHA256).
 - **Doble Nivel de Seguridad (Contraseña del Almacén vs. Contraseña del Alias)**:
   1. *Contraseña del Almacén (KeyStore)*: Desbloquea y autentica el contenedor completo.
   2. *Contraseña de la Clave Privada (Alias)*: Cada clave privada RSA se almacena cifrada individualmente bajo el estándar **PKCS#8** con algoritmo `BestAvailableEncryption` (AES-256-CBC).
-- **Criptografía Asimétrica**: Pares de claves **RSA de 2048 bits** con exponente público estándar $e = 65537$.
-- **Integridad y Firma Digital**: Las solicitudes CSR y certificados X.509 se firman utilizando la función resumen criptográfica **SHA-256** (descartando algoritmos obsoletos como MD5 o SHA-1).
+- **Reglas y Restricciones Estrictas de Contraseñas (Keytool)**:
+  * **Longitud mínima**: 6 caracteres exactos. Si se introduce una longitud de 1 a 5 caracteres, la herramienta rechaza la entrada devolviendo el mensaje oficial: *"Keystore password is too short - must be at least 6 characters"*.
+  * **Espacios y caracteres**: Permite espacios en blanco intermedios o contraseñas compuestas únicamente de espacios, así como cualquier carácter Unicode válido.
+- **Criptografía Asimétrica y Algoritmos**: Pares de claves **RSA de 2048 bits** con exponente público estándar $e = 65537$ y algoritmo de firma digital **SHA256withRSA** (SHA-256 con RSA).
+- **Validez del Certificado**: Por defecto, los certificados autofirmados X.509 v3 se emiten con **90 días de validez** (valor estándar del modificador `-validity` en Java Keytool).
+- **Alias y Convenciones**: El alias por defecto es **`mykey`** (si se omite o se pulsa Enter en blanco) y es insensible a mayúsculas/minúsculas como en los formatos estándar PKCS12/JKS.
+- **Nombre Distinguido (DName)**: Admite omitir campos opcionales; el Common Name (CN) y los campos vacíos toman el valor por defecto literal **`Unknown`**, normalizando el código de país (C) a 2 letras mayúsculas ISO 3166-1.
 - **Persistencia Atómica**: La escritura del archivo de almacén se realiza a través de un archivo temporal y reemplazo atómico (`os.replace`) para evitar corrupción en caso de interrupción.
 
 ---
@@ -76,28 +81,28 @@ options:
   --delete              [Ampliación] Elimina un alias del KeyStore de forma segura.
   --store, --keystore STORE
                         Ruta del almacén cifrado (por defecto: keystore.pystore).
-  --alias ALIAS         Alias de la clave (opcional; si se omite se solicitará de forma interactiva).
+  --alias ALIAS         Alias de la clave (opcional; si se omite o se deja en blanco, el valor por defecto es 'mykey').
   --file FILE           Ruta de archivo de entrada o salida (para --certreq, --exportcert o --printcert).
 ```
 
 ---
 
 ### 4.2. Generación de Par de Claves y Almacén (`--genkeypair` o `--genkey`)
-Crea un nuevo almacén (o actualiza uno existente), solicita los datos del titular (**Distinguished Name**) y genera el par de claves RSA de 2048 bits junto a un certificado autofirmado X.509.
+Crea un nuevo almacén (o actualiza uno existente), solicita los datos del titular (**Distinguished Name**) y genera el par de claves RSA de 2048 bits junto a un certificado autofirmado X.509 válido por 90 días.
 
 ```console
 $ python mykeytool.py --genkeypair
-Contraseña nueva del KeyStore: ********
-Confirma la contraseña del KeyStore: ********
-Alias de la clave: servidor-web
-Nombre común (CN): monlau.es
-Unidad organizativa (OU): Informatica
-Organización (O): Monlau Formacio
-Localidad (L): Barcelona
-Provincia o estado (ST): Barcelona
-País, código de 2 letras (C): ES
-Contraseña nueva del alias 'servidor-web': ********
-Confirma la contraseña del alias 'servidor-web': ********
+Contraseña nueva del KeyStore: ******
+Confirma la contraseña del KeyStore: ******
+Alias de la clave [mykey]: servidor-web
+Nombre y apellidos o nombre común (CN) [Unknown]: monlau.es
+Nombre de la unidad organizativa (OU) [Unknown]: Informatica
+Nombre de la organización (O) [Unknown]: Monlau Formacio
+Nombre de la ciudad o localidad (L) [Unknown]: Barcelona
+Nombre del estado o provincia (ST) [Unknown]: Barcelona
+Código de país de dos letras (C) [Unknown]: ES
+Contraseña nueva del alias 'servidor-web': ******
+Confirma la contraseña del alias 'servidor-web': ******
 Par RSA de 2048 bits guardado con el alias 'servidor-web' en keystore.pystore.
 ```
 
@@ -199,19 +204,24 @@ python -m unittest discover -s tests -v
 | # | Caso de Prueba | Entrada / Condición | Comportamiento Esperado | Resultado |
 |:--|:---|:---|:---|:---:|
 | 1 | **Ayuda CLI** | `python mykeytool.py --help` | Lista todos los comandos, parámetros y descripciones | **OK** |
-| 2 | **Creación y lectura almacén** | Datos válidos y contraseña correcta | Se serializa y descifra íntegramente | **OK** |
+| 2 | **Creación y lectura almacén** | Datos válidos y contraseña correcta | Se serializa y descifra íntegramente (round-trip) | **OK** |
 | 3 | **Contraseña incorrecta almacén** | Contraseña errónea en `load_store` | `StorePasswordError`, mensaje claro sin traceback | **OK** |
 | 4 | **Almacén inexistente / corrupto** | Ruta inexistente o fichero alterado | `StoreCorruptedError`, aviso amigable al usuario | **OK** |
 | 5 | **Alias duplicado** | Generar clave con alias ya existente | Rechazo con `AliasExistsError`, almacén intacto | **OK** |
 | 6 | **Campos opcionales DName** | Solo CN rellenado, resto vacíos | Se genera el par de claves sin error | **OK** |
-| 7 | **Generación de CSR y validación RSA** | `--genkeypair` + `--certreq` | CSR PEM con clave pública RSA 2048 bits y firma SHA-256 | **OK** |
-| 8 | **Contraseña incorrecta alias** | Contraseña de clave errónea en CSR | No se extrae la clave privada ni se crea el archivo `.csr` | **OK** |
-| 9 | **Validación de caracteres en alias** | Separadores de ruta (`../bad`) | `ValueError`, prevención de ataques de path traversal | **OK** |
-| 10 | **Compatibilidad flags `--genkeypair` y `--keystore`** | Parámetros estándar de Java keytool | Ejecución fluida sin diferencias de sintaxis | **OK** |
-| 11 | **Listado de entradas (`--list`)** | Almacén con claves activas | Muestra tipo `PrivateKeyEntry`, DName y SHA-256 | **OK** |
-| 12 | **Exportación de certificado (`--exportcert`)** | Exportar certificado a `.crt` | Fichero `.crt` X.509 PEM válido y legible | **OK** |
-| 13 | **Inspección de certificado (`--printcert`)** | Archivo `.crt` exportado | Impresión de campos de sujeto, validez y huella digital | **OK** |
-| 14 | **Eliminación y cancelación (`--delete`)** | Confirmar con 'n' y luego 's' | 'n' mantiene el alias intacto; 's' lo elimina del almacén | **OK** |
+| 7 | **CN vacío por defecto** | Pulsar Enter en CN | Asigna 'Unknown' por defecto como en Java Keytool | **OK** |
+| 8 | **Generación de CSR y validación RSA** | `--genkeypair` + `--certreq` | CSR PEM con clave pública RSA 2048 bits y firma SHA-256 | **OK** |
+| 9 | **Contraseña incorrecta alias** | Contraseña de clave errónea en CSR | No se extrae la clave privada ni se crea el archivo `.csr` | **OK** |
+| 10 | **Validación de caracteres en alias** | Separadores de ruta (`../bad`) | `ValueError`, prevención de ataques de path traversal | **OK** |
+| 11 | **Compatibilidad flags `--genkeypair` y `--keystore`** | Parámetros estándar de Java keytool | Ejecución fluida sin diferencias de sintaxis | **OK** |
+| 12 | **Listado de entradas (`--list`)** | Almacén con claves activas | Muestra tipo `PrivateKeyEntry`, DName y SHA-256 | **OK** |
+| 13 | **Exportación de certificado (`--exportcert`)** | Exportar certificado a `.crt` | Fichero `.crt` X.509 PEM válido y legible | **OK** |
+| 14 | **Inspección de certificado (`--printcert`)** | Archivo `.crt` exportado | Impresión de campos de sujeto, validez y huella digital | **OK** |
+| 15 | **Eliminación y cancelación (`--delete`)** | Confirmar con 'n' y luego 's' | 'n' mantiene el alias intacto; 's' lo elimina del almacén | **OK** |
+| 16 | **Restricción contraseñas Keytool** | 1-5 caracteres rechazados, 6+ espacios/Unicode | Exige mínimo 6 caracteres exactos y acepta espacios | **OK** |
+| 17 | **Alias por defecto 'mykey' e insensibilidad** | Alias vacío o mayúsculas ('MYKEY') | Asigna 'mykey' y no distingue mayúsculas/minúsculas | **OK** |
+| 18 | **Validez estándar de 90 días** | Generación de certificado autofirmado | Comprobación de validez de 90 días exactos | **OK** |
+| 19 | **Normalización de código de país** | Introducir 'es' en minúsculas en DName | Normaliza automáticamente a mayúsculas 'ES' | **OK** |
 
 ---
 
