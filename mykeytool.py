@@ -114,10 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
 # Funciones Auxiliares para Captura Segura de Contraseñas y Datos
 # ==============================================================================
 def _ask_password(prompt: str) -> str:
-    """Pide una contraseña usando getpass (sin mostrarla en pantalla) y valida longitud mínima."""
+    """
+    Pide una contraseña usando getpass (sin mostrarla en pantalla).
+    Valida la restricción estricta de Java Keytool: longitud mínima de 6 caracteres exactos.
+    Permite cualquier carácter Unicode y espacios en blanco.
+    """
     password = getpass.getpass(prompt)
-    if len(password) < 8:
-        raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+    if len(password) < 6:
+        raise ValueError("La contraseña es demasiado corta: debe tener al menos 6 caracteres (Keystore password is too short - must be at least 6 characters).")
     return password
 
 

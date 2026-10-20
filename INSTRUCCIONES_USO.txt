@@ -35,7 +35,7 @@ Ejecuta:
     python mykeytool.py --genkeypair
 
 El programa te pedirá:
-- Contraseña para el KeyStore y su confirmación (mínimo 8 caracteres).
+- Contraseña para el KeyStore y su confirmación (mínimo 6 caracteres exactos, según estándar de Java Keytool).
 - Alias para identificar la clave (por ejemplo: `servidor-web`).
 - Datos del titular (DName):
   * CN: Nombre común / Dominio (ej. monlau.es)

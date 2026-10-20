@@ -191,5 +191,28 @@ class KeystoreTests(unittest.TestCase):
         self.assertNotIn("demo-del", contents["aliases"])
 
 
+    def test_password_validation_rules(self) -> None:
+        from mykeytool import _ask_password
+
+        # Contraseña de 1 a 5 caracteres debe fallar
+        for short_pass in ["", "1", "12", "123", "1234", "12345"]:
+            with patch("getpass.getpass", return_value=short_pass):
+                with self.assertRaises(ValueError) as ctx:
+                    _ask_password("Prompt: ")
+                self.assertIn("al menos 6 caracteres", str(ctx.exception))
+
+        # Contraseña de 6 caracteres exactos debe ser válida
+        with patch("getpass.getpass", return_value="123456"):
+            self.assertEqual(_ask_password("Prompt: "), "123456")
+
+        # Contraseña de 6 espacios en blanco debe ser válida (keytool permite espacios)
+        with patch("getpass.getpass", return_value="      "):
+            self.assertEqual(_ask_password("Prompt: "), "      ")
+
+        # Contraseña con espacios intermedios y caracteres Unicode
+        with patch("getpass.getpass", return_value="mi clave con espacios ñ!"):
+            self.assertEqual(_ask_password("Prompt: "), "mi clave con espacios ñ!")
+
+
 if __name__ == "__main__":
     unittest.main()
