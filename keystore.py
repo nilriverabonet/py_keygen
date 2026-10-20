@@ -175,10 +175,11 @@ def save_store(path: Path, password: str, contents: dict[str, Any]) -> None:
 def generate_key_materials(
     alias_password: str,
     subject_values: list[tuple[str, str]] | None = None,
-    days_valid: int = 365,
+    days_valid: int = 90,
 ) -> tuple[bytes, str, str]:
     """
     Genera el par de claves RSA (2048 bits, e=65537) y un certificado autofirmado inicial.
+    La validez por defecto del certificado en Java Keytool (-validity) es de 90 días.
     Retorna:
       - Clave privada cifrada con la contraseña del alias en formato PKCS#8 PEM.
       - Clave pública en formato PEM (SubjectPublicKeyInfo).
@@ -226,7 +227,8 @@ def generate_key_materials(
             if v and k in name_oids:
                 attributes.append(x509.NameAttribute(name_oids[k], v))
     if not attributes:
-        attributes.append(x509.NameAttribute(NameOID.COMMON_NAME, "Keytool Simulator User"))
+        # En Java Keytool, si no se especifican valores se asigna 'Unknown' por defecto
+        attributes.append(x509.NameAttribute(NameOID.COMMON_NAME, "Unknown"))
 
     # 5. Creamos el certificado autofirmado inicial (como hace Java keytool con -genkeypair)
     subject_name = x509.Name(attributes)

@@ -99,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--alias",
         type=str,
         default=None,
-        help="Alias de la clave (opcional; si se omite se solicitará de forma interactiva).",
+        help="Alias de la clave (opcional; si se omite o se deja en blanco, el valor por defecto es 'mykey').",
     )
     parser.add_argument(
         "--file",
@@ -113,6 +113,20 @@ def build_parser() -> argparse.ArgumentParser:
 # ==============================================================================
 # Funciones Auxiliares para Captura Segura de Contraseñas y Datos
 # ==============================================================================
+def _resolve_alias(alias_arg: str | None, prompt: str = "Alias de la clave [mykey]: ") -> str:
+    """
+    Obtiene y valida el alias de la clave.
+    Siguiendo la especificación oficial de Java Keytool:
+    - Si no se especifica o se pulsa Enter en blanco, el valor por defecto es 'mykey'.
+    - El alias es insensible a mayúsculas y minúsculas (se normaliza en minúsculas).
+    """
+    if alias_arg is not None and alias_arg.strip():
+        raw_alias = alias_arg.strip()
+    else:
+        raw_alias = input(prompt).strip()
+    if not raw_alias:
+        raw_alias = "mykey"
+    return validate_alias(raw_alias).lower()
 def _ask_password(prompt: str) -> str:
     """
     Pide una contraseña usando getpass (sin mostrarla en pantalla).
@@ -205,9 +219,8 @@ def _generate_key(store_path: Path, alias_arg: str | None = None) -> None:
         store_password = _ask_new_password("KeyStore")
         contents = {"aliases": {}}
 
-    # Obtenemos el alias por argumento CLI o por prompt interactivo
-    raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
-    alias = validate_alias(raw_alias)
+    # Obtenemos el alias por argumento CLI o por prompt interactivo (por defecto 'mykey')
+    alias = _resolve_alias(alias_arg)
     aliases: dict[str, Any] = contents.setdefault("aliases", {})
     if alias in aliases:
         raise AliasExistsError(f"El alias '{alias}' ya existe en el almacén.")
@@ -216,7 +229,7 @@ def _generate_key(store_path: Path, alias_arg: str | None = None) -> None:
     subject_values = _read_distinguished_name()
     alias_password = _ask_new_password(f"alias '{alias}'")
     
-    # Generamos los componentes criptográficos
+    # Generamos los componentes criptográficos (validez por defecto: 90 días en Keytool)
     encrypted_key, public_key_pem, cert_pem = generate_key_materials(alias_password, subject_values)
 
     dname_str = ", ".join(f"{k}={v}" for k, v in subject_values)
@@ -247,8 +260,7 @@ def _generate_csr(store_path: Path, alias_arg: str | None = None, file_arg: Path
     """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
-    raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
-    alias = validate_alias(raw_alias)
+    alias = _resolve_alias(alias_arg)
     record = contents.get("aliases", {}).get(alias)
     if record is None:
         raise AliasNotFoundError(f"No existe el alias '{alias}' en el almacén.")
@@ -332,8 +344,7 @@ def _export_cert(store_path: Path, alias_arg: str | None = None, file_arg: Path 
     """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
-    raw_alias = alias_arg if alias_arg is not None else input("Alias de la clave: ").strip()
-    alias = validate_alias(raw_alias)
+    alias = _resolve_alias(alias_arg)
     record = contents.get("aliases", {}).get(alias)
     if record is None:
         raise AliasNotFoundError(f"No existe el alias '{alias}' en el almacén.")
@@ -384,8 +395,8 @@ def _delete_alias(store_path: Path, alias_arg: str | None = None) -> None:
     """
     store_password = _ask_password("Contraseña del KeyStore: ")
     contents = load_store(store_path, store_password)
-    raw_alias = alias_arg if alias_arg is not None else input("Alias a eliminar: ").strip()
-    alias = validate_alias(raw_alias)
+    raw_alias = alias_arg.strip() if alias_arg is not None else input("Alias a eliminar: ").strip()
+    alias = validate_alias(raw_alias).lower()
     aliases: dict[str, Any] = contents.get("aliases", {})
     if alias not in aliases:
         raise AliasNotFoundError(f"No existe el alias '{alias}' en el almacén.")

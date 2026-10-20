@@ -213,6 +213,29 @@ class KeystoreTests(unittest.TestCase):
         with patch("getpass.getpass", return_value="mi clave con espacios ñ!"):
             self.assertEqual(_ask_password("Prompt: "), "mi clave con espacios ñ!")
 
+    def test_default_alias_and_case_insensitivity(self) -> None:
+        # Si se deja vacío el alias pulsando Enter, toma 'mykey' por defecto
+        answers = ["", "My CN", "", "", "", "", ""]
+        passwords = ["store-pass-def", "store-pass-def", "alias-pass-def", "alias-pass-def"]
+        with patch("builtins.input", side_effect=answers), patch("getpass.getpass", side_effect=passwords):
+            self.assertEqual(main(["--genkey", "--store", str(self.store_path)]), 0)
+
+        contents = load_store(self.store_path, "store-pass-def")
+        self.assertIn("mykey", contents["aliases"])
+
+        # Insensibilidad a mayúsculas/minúsculas: intentar registrar 'MYKEY' debe dar error de duplicado
+        with patch("builtins.input", return_value="MYKEY"), patch(
+            "getpass.getpass", return_value="store-pass-def"
+        ), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(main(["--genkey", "--store", str(self.store_path)]), 1)
+
+    def test_default_validity_90_days(self) -> None:
+        from keystore import generate_key_materials
+        _, _, cert_pem = generate_key_materials("alias-pass-val")
+        cert = x509.load_pem_x509_certificate(cert_pem.encode("ascii"))
+        delta = cert.not_valid_after_utc - cert.not_valid_before_utc
+        self.assertEqual(delta.days, 90)
+
 
 if __name__ == "__main__":
     unittest.main()
