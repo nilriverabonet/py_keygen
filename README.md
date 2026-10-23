@@ -55,6 +55,7 @@ De acuerdo con el manual de teoría del módulo y las especificaciones oficiales
 - **Validez del Certificado**: Por defecto, los certificados autofirmados X.509 v3 se emiten con **90 días de validez** (valor estándar del modificador `-validity` en Java Keytool).
 - **Alias y Convenciones**: El alias por defecto es **`mykey`** (si se omite o se pulsa Enter en blanco) y es insensible a mayúsculas/minúsculas como en los formatos estándar PKCS12/JKS.
 - **Nombre Distinguido (DName)**: Admite omitir campos opcionales; el Common Name (CN) y los campos vacíos toman el valor por defecto literal **`Unknown`**, normalizando el código de país (C) a 2 letras mayúsculas ISO 3166-1.
+- **Formato de Almacén Binario Ilegible (PKS1)**: El almacén se persiste en un formato binario puro (`b"PKS1"` + sal aleatoria de 16 bytes + payload cifrado Fernet). No contiene estructuras JSON ni texto en claro, por lo que es completamente ininteligible si se abre con un editor de texto (Notepad, VS Code, etc.), garantizando que ningún usuario pueda leer ni metadatos ni claves sin la contraseña. Además, mantiene retrocompatibilidad de lectura con almacenes heredados.
 - **Persistencia Atómica**: La escritura del archivo de almacén se realiza a través de un archivo temporal y reemplazo atómico (`os.replace`) para evitar corrupción en caso de interrupción.
 
 ---

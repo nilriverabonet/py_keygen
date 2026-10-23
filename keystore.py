@@ -94,32 +94,51 @@ def _fernet(password: str, salt: bytes):
 # ==============================================================================
 def load_store(path: Path, password: str) -> dict[str, Any]:
     """
-    Lee y descifra el archivo del almacén (keystore.pystore / json).
+    Lee y descifra el archivo del almacén (formato binario PKS1 o sobre JSON heredado).
     Verifica que el archivo exista, extrae la sal y el token cifrado, y
     lo descifra con Fernet. Si la contraseña no coincide, Fernet lanza InvalidToken.
     """
     if not path.exists():
         raise StoreCorruptedError(f"No se encuentra el almacén: {path}")
 
-    # 1. Leemos el sobre exterior en formato JSON
     try:
-        envelope = json.loads(path.read_text(encoding="utf-8"))
-        if envelope.get("version") != 1:
-            raise ValueError("versión de almacén desconocida")
-        salt = base64.b64decode(envelope["salt"], validate=True)
-        token = base64.b64decode(envelope["data"], validate=True)
-        if len(salt) != 16:
-            raise ValueError("sal inválida")
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
-        raise StoreCorruptedError("El almacén está dañado o tiene un formato no válido.") from error
+        raw_data = path.read_bytes()
+    except OSError as error:
+        raise StoreCorruptedError(f"Error al leer el archivo del almacén: {error}") from error
+
+    Fernet, InvalidToken, _, _ = _crypto()
+
+    # 1. Determinamos si es el formato binario nativo (PKS1) o el sobre JSON anterior
+    if raw_data.startswith(b"PKS1"):
+        # Encabezado (4) + Sal (16) + mínimo payload Fernet (57) = 77 bytes
+        if len(raw_data) < 77:
+            raise StoreCorruptedError("El almacén binario está incompleto o dañado.")
+        salt = raw_data[4:20]
+        raw_token = raw_data[20:]
+        token = base64.urlsafe_b64encode(raw_token)
+    elif raw_data.startswith(b"{"):
+        # Formato JSON anterior (mantenido por retrocompatibilidad)
+        try:
+            envelope = json.loads(raw_data.decode("utf-8"))
+            if envelope.get("version") != 1:
+                raise ValueError("versión de almacén desconocida")
+            salt = base64.b64decode(envelope["salt"], validate=True)
+            token = base64.b64decode(envelope["data"], validate=True)
+            if len(salt) != 16:
+                raise ValueError("sal inválida")
+        except (UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            raise StoreCorruptedError("El almacén está dañado o tiene un formato no válido.") from error
+    else:
+        raise StoreCorruptedError("El almacén está dañado o tiene un formato no válido.")
 
     # 2. Desciframos con Fernet (AES-128-CBC + HMAC de autenticación)
-    Fernet, InvalidToken, _, _ = _crypto()
     try:
         plaintext = _fernet(password, salt).decrypt(token)
     except InvalidToken as error:
         # Si la contraseña es errónea o el archivo se alteró, el HMAC no cuadra
         raise StorePasswordError("Contraseña incorrecta o almacén alterado.") from error
+    except Exception as error:
+        raise StoreCorruptedError("Error al procesar el contenedor cifrado.") from error
 
     # 3. Parseamos el JSON interior descifrado con los alias y certificados
     try:
@@ -138,30 +157,30 @@ def load_store(path: Path, password: str) -> dict[str, Any]:
 
 def save_store(path: Path, password: str, contents: dict[str, Any]) -> None:
     """
-    Cifra y guarda el almacén en disco de forma atómica.
-    Escribimos primero en un archivo temporal y luego hacemos os.replace()
+    Cifra y guarda el almacén en disco en formato binario puro (no legible como texto).
+    Escribimos primero en un archivo temporal binario y luego hacemos os.replace()
     para garantizar que nunca nos quede un archivo corrupto si el guardado se corta.
+    Estructura binaria:
+      - 4 bytes: Magic number b"PKS1" (Python KeyStore v1)
+      - 16 bytes: Sal criptográfica aleatoria (PBKDF2)
+      - Resto: Carga útil cifrada en bytes binarios (Fernet AES-128-CBC + HMAC-SHA256)
     """
     # Generamos una sal criptográfica nueva de 16 bytes para este guardado
     salt = os.urandom(16)
     plaintext = json.dumps(contents, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     token = _fernet(password, salt).encrypt(plaintext)
-    
-    envelope = {
-        "version": 1,
-        "salt": base64.b64encode(salt).decode("ascii"),
-        "data": base64.b64encode(token).decode("ascii"),
-    }
+    raw_token = base64.urlsafe_b64decode(token)
+    binary_data = b"PKS1" + salt + raw_token
     
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: str | None = None
     try:
-        # Creamos archivo temporal en el mismo directorio para asegurar reemplazo atómico
+        # Creamos archivo temporal en modo binario en el mismo directorio
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+            mode="wb", dir=path.parent, prefix=f".{path.name}.", delete=False
         ) as temporary_file:
             temporary_path = temporary_file.name
-            json.dump(envelope, temporary_file, separators=(",", ":"))
+            temporary_file.write(binary_data)
         os.replace(temporary_path, path)
     finally:
         # Limpieza por si ocurrió algún error antes de mover el archivo

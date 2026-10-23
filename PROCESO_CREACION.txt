@@ -31,7 +31,10 @@ c) Doble nivel de contraseñas (Store Password vs Alias Password):
    - La contraseña del almacén protege todo el contenedor en disco.
    - Cada clave privada individual está cifrada bajo el estándar PKCS#8 con `BestAvailableEncryption` (AES-256-CBC) usando la contraseña de su propio alias. Incluso si un atacante obtuviera acceso al archivo descifrado en memoria, no podría usar la clave privada sin su contraseña individual.
 
-d) Escritura atómica (`os.replace`):
+d) Formato de Almacén Binario Ilegible (`PKS1`):
+   Para evitar que el almacén sea legible como texto plano o JSON al abrirlo en editores como Notepad o VS Code, el archivo se guarda en formato binario puro compuesto por el identificador mágico `b"PKS1"`, la sal de 16 bytes y el payload de bytes cifrados. Al abrir el fichero, el sistema o editor lo reconoce como archivo binario con caracteres no imprimibles.
+
+e) Escritura atómica (`os.replace`):
    Para evitar que una caída de tensión o error durante el guardado deje el almacén corrupto, se escribe primero en un archivo temporal (`tempfile.NamedTemporaryFile`) y se reemplaza el archivo original atómicamente.
 
 4. Ampliaciones Implementadas (Criterio de Evaluación: 30% / 3.0 pts)

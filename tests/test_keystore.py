@@ -34,9 +34,33 @@ class KeystoreTests(unittest.TestCase):
         contents = {"aliases": {"demo": {"subject": [["CN", "Example"]]}}}
         save_store(self.store_path, "correct-password", contents)
 
+        # Verificamos que el archivo sea binario (empieza por PKS1) y no texto JSON legible
+        raw_bytes = self.store_path.read_bytes()
+        self.assertTrue(raw_bytes.startswith(b"PKS1"))
+        with self.assertRaises((UnicodeDecodeError, Exception)):
+            # Intentar decodificarlo como texto UTF-8 / JSON debe fallar
+            raw_bytes.decode("utf-8")
+
         self.assertEqual(load_store(self.store_path, "correct-password"), contents)
         with self.assertRaises(StorePasswordError):
             load_store(self.store_path, "wrong-password")
+
+    def test_backward_compatibility_with_legacy_json_envelope(self) -> None:
+        # Probamos que almacenes antiguos guardados con sobre JSON siguen funcionando
+        import base64
+        from keystore import _fernet
+        contents = {"aliases": {"legacy": {"subject": [["CN", "Legacy"]]}}}
+        salt = b"1234567890123456"
+        token = _fernet("mypass", salt).encrypt(b'{"aliases": {"legacy": {"subject": [["CN", "Legacy"]]}}}')
+        import json
+        envelope = {
+            "version": 1,
+            "salt": base64.b64encode(salt).decode("ascii"),
+            "data": base64.b64encode(token).decode("ascii"),
+        }
+        self.store_path.write_text(json.dumps(envelope), encoding="utf-8")
+        loaded = load_store(self.store_path, "mypass")
+        self.assertEqual(loaded, contents)
 
     def test_missing_and_malformed_store_are_reported(self) -> None:
         with self.assertRaises(StoreCorruptedError):
