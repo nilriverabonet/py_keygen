@@ -1,0 +1,124 @@
+================================================================================
+           GUIA DE COMANDOS - SIMULADOR JAVA KEYTOOL (mykeytool.py)
+================================================================================
+
+Este documento contiene todos los comandos disponibles en el simulador de Keytool,
+sus parámetros opcionales y una breve explicación de lo que hace cada uno.
+
+--------------------------------------------------------------------------------
+1. COMANDOS PRINCIPALES (ACCIONES)
+--------------------------------------------------------------------------------
+Solo se puede ejecutar una acción principal a la vez.
+
+* python mykeytool.py --help  (o -h)
+  EXPLICACIÓN:
+  Muestra la ayuda interactiva en consola con la lista completa de comandos
+  y opciones disponibles.
+
+* python mykeytool.py --genkeypair  (o --genkey)
+  EXPLICACIÓN:
+  Genera un par de claves asimétricas RSA de 2048 bits junto con un certificado
+  autofirmado X.509 v3 (válido durante 90 días) y lo guarda cifrado dentro
+  del almacén de claves (KeyStore). Solicita interactivamente los datos del
+  titular (DName) y las contraseñas.
+
+* python mykeytool.py --certreq
+  EXPLICACIÓN:
+  Genera una solicitud de firma de certificado (CSR - Certificate Signing
+  Request) en formato PEM (archivo .csr). Permite solicitar a una Autoridad de
+  Certificación (CA) la emisión de un certificado oficial sin revelar nunca la
+  clave privada.
+
+* python mykeytool.py --list
+  EXPLICACIÓN:
+  Muestra un listado detallado de todas las entradas guardadas en el almacén:
+  nombre del alias, tipo de entrada (PrivateKeyEntry), datos del titular (DName)
+  y huella digital criptográfica SHA-256 del certificado.
+
+* python mykeytool.py --exportcert  (o --export)
+  EXPLICACIÓN:
+  Extrae y exporta el certificado público X.509 de un alias a un fichero .crt
+  independiente en formato estándar PEM, apto para instalar en navegadores,
+  servidores o sistemas operativos.
+
+* python mykeytool.py --printcert
+  EXPLICACIÓN:
+  Inspecciona y muestra en pantalla los metadatos técnicos de un certificado
+  (.crt) o de una solicitud (.csr) externa (sujeto, emisor, fechas de validez,
+  número de serie, algoritmo y huellas SHA-256 / SHA-1). No requiere contraseña
+  porque los certificados son públicos.
+
+* python mykeytool.py --delete
+  EXPLICACIÓN:
+  Elimina de forma permanente y segura un alias y sus claves asociadas del
+  almacén. Solicita confirmación previa (s/n) antes de proceder con el borrado.
+
+
+--------------------------------------------------------------------------------
+2. PARÁMETROS Y MODIFICADORES OPCIONALES
+--------------------------------------------------------------------------------
+Estos parámetros se pueden combinar con los comandos anteriores:
+
+* --alias <nombre>
+  EXPLICACIÓN:
+  Indica el nombre identificador (alias) de la clave sobre la que operar.
+  Si no se especifica ni se introduce por teclado, usa 'mykey' por defecto.
+  Es insensible a mayúsculas y minúsculas.
+
+* --store <ruta>  (o --keystore <ruta>)
+  EXPLICACIÓN:
+  Especifica la ruta o nombre del archivo de almacén.
+  Si no se indica, utiliza 'keystore.pystore' en el directorio actual.
+
+* --file <ruta>
+  EXPLICACIÓN:
+  Especifica el archivo de entrada o salida personalizado:
+  - En --certreq: nombre del archivo .csr a generar.
+  - En --exportcert: nombre del archivo .crt donde guardar el certificado.
+  - En --printcert: ruta del archivo .crt o .csr que se desea inspeccionar.
+
+
+--------------------------------------------------------------------------------
+3. EJEMPLOS PRÁCTICOS DE USO (LISTOS PARA COPIAR Y PEGAR)
+--------------------------------------------------------------------------------
+
+1) Ver la ayuda:
+   python mykeytool.py --help
+
+2) Crear almacén y generar un nuevo par de claves RSA:
+   python mykeytool.py --genkeypair --alias servidor-web
+
+3) Crear una solicitud de certificado (CSR):
+   python mykeytool.py --certreq --alias servidor-web --file mi_peticion.csr
+
+4) Ver el contenido y entradas del almacén:
+   python mykeytool.py --list
+
+5) Exportar el certificado público a un archivo .crt:
+   python mykeytool.py --exportcert --alias servidor-web --file servidor-web.crt
+
+6) Ver los detalles de un certificado exportado (sin pedir contraseña):
+   python mykeytool.py --printcert --file servidor-web.crt
+
+7) Ver los detalles de una solicitud CSR:
+   python mykeytool.py --printcert --file mi_peticion.csr
+
+8) Eliminar una clave del almacén:
+   python mykeytool.py --delete --alias servidor-web
+
+9) Trabajar con un almacén en otra ruta o con otro nombre:
+   python mykeytool.py --list --keystore otro_almacen.pystore
+
+
+--------------------------------------------------------------------------------
+4. COMANDOS ADICIONALES DEL PROYECTO
+--------------------------------------------------------------------------------
+
+* Instalar dependencias requeridas:
+  pip install -r requirements.txt
+  (o bien: pip install cryptography)
+
+* Ejecutar la batería de tests unitarios automáticos:
+  python -m unittest discover -s tests -v
+
+================================================================================
